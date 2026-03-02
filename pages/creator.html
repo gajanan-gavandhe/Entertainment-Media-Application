@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StreamVerse — Creator Studio</title>
+<link rel="stylesheet" href="../css/global.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<style>
+.studio-hdr{background:linear-gradient(135deg,rgba(16,185,129,.15) 0%,rgba(124,58,237,.1) 100%);border:1px solid var(--border);border-radius:16px;padding:2rem;margin-bottom:2rem;display:flex;align-items:center;justify-content:space-between;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
+.s-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;position:relative;overflow:hidden;}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.s-card.c1::before{background:var(--purple);}
+.s-card.c2::before{background:var(--green);}
+.s-card.c3::before{background:var(--amber);}
+.s-card.c4::before{background:var(--teal);}
+.s-icon{font-size:1.3rem;margin-bottom:.4rem;}
+.s-val{font-family:'Syne',sans-serif;font-size:1.7rem;font-weight:800;color:#fff;line-height:1;}
+.s-lbl{font-size:.72rem;color:var(--muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.07em;}
+.s-delta{font-size:.72rem;margin-top:.4rem;color:var(--green);}
+.content-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem;display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;transition:border-color .2s;}
+.content-item:hover{border-color:rgba(124,58,237,.3);}
+.ci-thumb{width:72px;height:52px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;}
+.ci-info{flex:1;min-width:0;}
+.ci-title{font-size:.9rem;font-weight:600;color:#fff;margin-bottom:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ci-meta{font-size:.76rem;color:var(--muted);}
+.ci-stats{display:flex;gap:1.2rem;flex-shrink:0;}
+.ci-s{text-align:center;}
+.ci-sv{font-family:'Syne',sans-serif;font-size:.92rem;font-weight:700;color:#fff;}
+.ci-sl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.ci-actions{display:flex;gap:.4rem;flex-shrink:0;}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem;}
+.tab{padding:.65rem 1.35rem;font-size:.84rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;}
+.tab.on{color:var(--purple2);border-bottom-color:var(--purple2);}
+.tab-panel{display:none;}
+.tab-panel.on{display:block;}
+/* Upload drop zone */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:2.2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem;}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--purple2);background:rgba(124,58,237,.06);}
+.dz-icon{font-size:2.2rem;margin-bottom:.5rem;}
+.upload-progress{display:none;margin-top:.6rem;}
+.progress-bar-wrap{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:.4rem;}
+.progress-bar-fill{height:100%;background:var(--purple);transition:width .3s;}
+.earnings-row{display:flex;align-items:center;gap:.75rem;padding:.8rem 1rem;border-bottom:1px solid var(--border);font-size:.83rem;}
+.earnings-row:last-child{border-bottom:none;}
+.earn-type{width:80px;flex-shrink:0;}
+.earn-amount{font-family:'Syne',sans-serif;font-weight:700;color:var(--green);margin-left:auto;}
+</style>
+</head>
+<body>
+<nav class="navbar" id="main-navbar"></nav>
+<div class="page-wrap">
+<div class="container section">
+
+  <div class="studio-hdr">
+    <div>
+      <div class="eyebrow">Creator Studio</div>
+      <h1 style="font-size:1.6rem;font-weight:800;color:#fff;" id="studio-name">My Studio</h1>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:.25rem;">Manage content · Track earnings · Grow your audience</p>
+    </div>
+    <button class="btn btn-primary" onclick="openUpload()">📤 Upload Content</button>
+  </div>
+
+  <!-- Live Stats -->
+  <div class="stats-row">
+    <div class="s-card c1"><div class="s-icon">👁</div><div class="s-val" id="sv-views">—</div><div class="s-lbl">Total Views</div><div class="s-delta" id="sd-views"></div></div>
+    <div class="s-card c2"><div class="s-icon">💰</div><div class="s-val" id="sv-earn">—</div><div class="s-lbl">Total Earnings</div><div class="s-delta" id="sd-earn"></div></div>
+    <div class="s-card c3"><div class="s-icon">📅</div><div class="s-val" id="sv-month">—</div><div class="s-lbl">This Month</div><div class="s-delta" id="sd-month"></div></div>
+    <div class="s-card c4"><div class="s-icon">🎬</div><div class="s-val" id="sv-count">—</div><div class="s-lbl">Content Items</div><div class="s-delta"></div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab on" onclick="switchTab('content',this)">🎬 My Content</div>
+    <div class="tab" onclick="switchTab('earnings',this)">💰 Earnings</div>
+    <div class="tab" onclick="switchTab('upload',this)">📤 Upload</div>
+  </div>
+
+  <!-- Content Tab -->
+  <div class="tab-panel on" id="tab-content">
+    <div style="display:flex;gap:.75rem;margin-bottom:1rem;align-items:center;">
+      <select class="form-select" style="width:auto;" id="status-filter" onchange="loadMyContent(0)">
+        <option value="">All Status</option>
+        <option value="PUBLISHED">Published</option>
+        <option value="PENDING_REVIEW">Pending</option>
+        <option value="DRAFT">Draft</option>
+      </select>
+      <span style="color:var(--muted);font-size:.83rem;" id="content-count-lbl"></span>
+    </div>
+    <div id="my-content-list"><div style="text-align:center;padding:2rem;color:var(--muted)"><span class="spinner"></span></div></div>
+    <div style="display:flex;justify-content:center;gap:.5rem;margin-top:1rem;" id="content-pagination"></div>
+  </div>
+
+  <!-- Earnings Tab -->
+  <div class="tab-panel" id="tab-earnings">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+      <div class="s-card"><div class="s-icon">💰</div><div class="s-val" id="te-total">—</div><div class="s-lbl">Total Earned</div></div>
+      <div class="s-card"><div class="s-icon">📅</div><div class="s-val" id="te-month">—</div><div class="s-lbl">This Month</div></div>
+      <div class="s-card"><div class="s-icon">📆</div><div class="s-val" id="te-week">—</div><div class="s-lbl">This Week</div></div>
+    </div>
+    <div class="table-wrap"><div id="earnings-list"></div></div>
+  </div>
+
+  <!-- Upload Tab -->
+  <div class="tab-panel" id="tab-upload">
+    <div style="max-width:620px;">
+      <h3 style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:1.25rem;">Upload New Content</h3>
+      <form id="upload-form" onsubmit="handleUpload(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label">Media File <span style="color:var(--muted);font-size:.72rem;">(MP4, MKV, MP3, WAV, YouTube URL)</span></label>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('media-file').click()"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="handleDrop(event)">
+            <div class="dz-icon">☁️</div>
+            <div style="font-size:.88rem;color:var(--muted);">Drag & drop or <span style="color:var(--purple2);font-weight:600;">browse file</span></div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem;">MP4, MKV, MP3, WAV · up to 2GB</div>
+            <div id="file-name" style="margin-top:.6rem;font-size:.82rem;color:var(--green);display:none;"></div>
+          </div>
+          <input type="file" id="media-file" style="display:none;" accept="video/*,audio/*" onchange="handleFileSelect(this)">
+          <div class="upload-progress" id="upload-prog">
+            <div style="font-size:.78rem;color:var(--muted);" id="upload-prog-lbl">Uploading...</div>
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" id="upload-fill" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">OR YouTube / External URL</label>
+          <input class="form-input" type="url" id="media-url" placeholder="https://youtube.com/watch?v=... or direct URL">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="up-title">Content Title *</label>
+          <input class="form-input" type="text" id="up-title" placeholder="Enter title" oninput="V.clearErr('up-title')">
+          <div class="form-error" id="up-title-err"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.85rem;">
+          <div class="form-group">
+            <label class="form-label" for="up-type">Type *</label>
+            <select class="form-select" id="up-type">
+              <option value="">Select type</option>
+              <option value="MOVIE">Movie</option><option value="SERIES">Series</option>
+              <option value="MUSIC">Music</option><option value="PODCAST">Podcast</option>
+              <option value="LIVE">Live</option><option value="ORIGINAL">Original</option>
+            </select>
+            <div class="form-error" id="up-type-err"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="up-genre">Genre *</label>
+            <select class="form-select" id="up-genre">
+              <option value="">Select genre</option>
+              <option>Action</option><option>Drama</option><option>Comedy</option><option>Sci-Fi</option>
+              <option>Horror</option><option>Fantasy</option><option>Documentary</option><option>Thriller</option>
+              <option>Romance</option><option>Pop</option><option>Rock</option><option>Hip-Hop</option>
+              <option>Education</option><option>Technology</option><option>Sports</option><option>News</option>
+            </select>
+            <div class="form-error" id="up-genre-err"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="up-desc">Description *</label>
+          <textarea class="form-input" id="up-desc" rows="3" placeholder="Describe your content (min 20 chars)" oninput="V.clearErr('up-desc')"></textarea>
+          <div class="form-error" id="up-desc-err"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;">
+          <div class="form-group">
+            <label class="form-label">Monetization</label>
+            <select class="form-select" id="up-monetize">
+              <option value="FREE">Free</option>
+              <option value="SUBSCRIPTION">Subscription</option>
+              <option value="PAY_PER_VIEW">Pay-Per-View</option>
+              <option value="RENTAL">Rental</option>
+              <option value="PREMIUM">Premium</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Age Rating</label>
+            <select class="form-select" id="up-rating">
+              <option>All Ages</option><option>PG</option><option>PG-13</option><option>R</option><option>18+</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Release Year</label>
+            <input class="form-input" type="number" id="up-year" placeholder="2024" min="1900" max="2030">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cast / Artists (comma separated)</label>
+          <input class="form-input" type="text" id="up-cast" placeholder="Actor 1, Actor 2, ...">
+        </div>
+        <div style="display:flex;gap:.75rem;margin-top:.5rem;">
+          <button type="submit" class="btn btn-primary" id="upload-btn">📤 Publish Content</button>
+          <button type="button" class="btn btn-ghost" onclick="saveDraft()">💾 Save as Draft</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3 class="modal-title">✏️ Edit Content</h3>
+    <form id="edit-form" onsubmit="submitEdit(event)" novalidate>
+      <input type="hidden" id="edit-id">
+      <div class="form-group"><label class="form-label">Title *</label><input class="form-input" type="text" id="e-title" oninput="V.clearErr('e-title')"><div class="form-error" id="e-title-err"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+        <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="e-type"><option value="MOVIE">Movie</option><option value="SERIES">Series</option><option value="MUSIC">Music</option><option value="PODCAST">Podcast</option></select></div>
+        <div class="form-group"><label class="form-label">Genre</label><input class="form-input" type="text" id="e-genre"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description *</label><textarea class="form-input" id="e-desc" rows="3" oninput="V.clearErr('e-desc')"></textarea><div class="form-error" id="e-desc-err"></div></div>
+      <div class="form-group"><label class="form-label">Media URL</label><input class="form-input" type="text" id="e-media" placeholder="YouTube URL or file path"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+        <div class="form-group"><label class="form-label">Monetization</label><select class="form-select" id="e-monetize"><option value="FREE">Free</option><option value="SUBSCRIPTION">Subscription</option><option value="PAY_PER_VIEW">Pay-Per-View</option><option value="RENTAL">Rental</option></select></div>
+        <div class="form-group"><label class="form-label">Price</label><input class="form-input" type="number" id="e-price" placeholder="0.00" step="0.01"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeEdit()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="edit-btn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="../js/app.js"></script>
+<script>
+if(!requireAuth()){}
+if(!requireRole('CREATOR','PUBLISHER','ADMIN')){}
+buildNavbar('creator');
+
+const user=API.getUser();
+if(user) document.getElementById('studio-name').textContent=(user.firstName||user.username)+"'s Studio";
+
+let uploadedMediaUrl='';
+let currentContentPage=0;
+
+// WebSocket for live earnings
+LiveData.connect(ok=>{
+  if(ok && user){
+    LiveData.subscribe('/topic/creator/'+user.id, msg=>{
+      if(msg.data){
+        animateCounter(document.getElementById('sv-views'), fmtNum(msg.data.totalViews));
+        animateCounter(document.getElementById('sv-earn'), fmtMoney(msg.data.totalEarnings));
+        animateCounter(document.getElementById('sv-month'), fmtMoney(msg.data.monthEarnings));
+      }
+    });
+  }
+  LiveData.poll(loadStats, 10000);
+});
+
+async function loadStats(){
+  try{
+    const d=await API.get('/creator/stats');
+    const s=d.data||{};
+    document.getElementById('sv-views').textContent = fmtNum(s.totalViews||0);
+    document.getElementById('sv-earn').textContent  = fmtMoney(s.totalEarnings||0);
+    document.getElementById('sv-month').textContent = fmtMoney(s.monthEarnings||0);
+    document.getElementById('sv-count').textContent = s.contentCount||0;
+    document.getElementById('te-total').textContent = fmtMoney(s.totalEarnings||0);
+    document.getElementById('te-month').textContent = fmtMoney(s.monthEarnings||0);
+    document.getElementById('te-week').textContent  = fmtMoney(s.weekEarnings||0);
+  }catch(e){}
+}
+
+async function loadMyContent(page=0){
+  const list=document.getElementById('my-content-list');
+  list.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted)"><span class="spinner"></span></div>';
+  try{
+    const d=await API.get('/creator/content?page='+page+'&size=10');
+    const data=d.data||{};
+    const items=data.content||[];
+    currentContentPage=page;
+    document.getElementById('content-count-lbl').textContent=`${data.totalElements||0} total`;
+    if(!items.length){ list.innerHTML='<div style="text-align:center;padding:2.5rem;color:var(--muted)">No content yet. <button class="btn btn-ghost btn-sm" onclick="switchTab(\'upload\',document.querySelector(\'.tab:nth-child(3)\'))">Upload your first →</button></div>'; return; }
+    list.innerHTML=items.map(c=>contentItem(c)).join('');
+    renderContentPag(data.totalPages||0, page);
+  }catch(e){ list.innerHTML='<div style="text-align:center;padding:2rem;color:var(--red)">Failed to load. Is backend running?</div>'; }
+}
+
+function contentItem(c){
+  const emoji={MOVIE:'🎬',SERIES:'📺',MUSIC:'🎵',PODCAST:'🎙',LIVE:'📡',ORIGINAL:'⭐'}[c.type]||'🎬';
+  const bg={MOVIE:'#1E3A5F',SERIES:'#2D1B00',MUSIC:'#1A0A2E',PODCAST:'#0A2E1A'}[c.type]||'#1A1A2E';
+  const statusBadge={PUBLISHED:'badge-green',PENDING_REVIEW:'badge-amber',DRAFT:'badge-purple',REJECTED:'badge-red',ARCHIVED:'badge-teal'}[c.status]||'badge-purple';
+  return `<div class="content-item">
+    <div class="ci-thumb" style="background:${bg}">${emoji}</div>
+    <div class="ci-info">
+      <div class="ci-title">${c.title}</div>
+      <div class="ci-meta">${c.type} · ${c.genre||'—'} · ${c.createdAt?fmtDate(c.createdAt):'—'}</div>
+    </div>
+    <span class="badge ${statusBadge}" style="flex-shrink:0">${c.status}</span>
+    <div class="ci-stats">
+      <div class="ci-s"><div class="ci-sv" id="cv-${c.id}">${fmtNum(c.viewCount||0)}</div><div class="ci-sl">Views</div></div>
+      <div class="ci-s"><div class="ci-sv" id="cp-${c.id}">${fmtNum(c.playCount||0)}</div><div class="ci-sl">Plays</div></div>
+      <div class="ci-s"><div class="ci-sv" style="color:var(--green)">${fmtMoney(c.totalEarnings||0)}</div><div class="ci-sl">Earned</div></div>
+    </div>
+    <div class="ci-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openEdit(${JSON.stringify(c).replace(/"/g,'&quot;')})">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteContent(${c.id},'${c.title.replace(/'/g,"\\'")}')">🗑</button>
+    </div>
+  </div>`;
+}
+
+function renderContentPag(total, current){
+  const p=document.getElementById('content-pagination'); p.innerHTML='';
+  if(total<=1) return;
+  for(let i=0;i<total;i++){
+    const b=document.createElement('button'); b.className='btn btn-ghost btn-sm'+(i===current?' btn-primary':'');
+    b.textContent=i+1; b.onclick=()=>loadMyContent(i); p.appendChild(b);
+  }
+}
+
+async function loadEarnings(){
+  try{
+    const d=await API.get('/creator/earnings?size=50');
+    const items=d.data||[];
+    const list=document.getElementById('earnings-list');
+    if(!items.length){ list.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted)">No earnings yet. Upload and share content to earn.</div>'; return; }
+    list.innerHTML=items.map(e=>`
+      <div class="earnings-row">
+        <span class="earn-type"><span class="badge badge-purple">${e.type}</span></span>
+        <span style="color:var(--muted);font-size:.78rem;">Content #${e.contentId}</span>
+        <span style="color:var(--muted);font-size:.76rem;margin-left:auto;margin-right:.5rem;">${timeAgo(e.earnedAt)}</span>
+        <span class="earn-amount">+${fmtMoney(e.amount)}</span>
+      </div>`).join('');
+  }catch(e){}
+}
+
+function switchTab(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('on'));
+  if(el) el.classList.add('on');
+  document.getElementById('tab-'+name)?.classList.add('on');
+  if(name==='content') loadMyContent(0);
+  if(name==='earnings') loadEarnings();
+}
+
+function openUpload(){ switchTab('upload', document.querySelector('.tabs .tab:nth-child(3)')); }
+
+// File upload
+function handleFileSelect(inp){
+  const file=inp.files[0]; if(!file) return;
+  document.getElementById('file-name').textContent='📁 '+file.name;
+  document.getElementById('file-name').style.display='block';
+  uploadFile(file);
+}
+function handleDrop(e){
+  e.preventDefault(); document.getElementById('drop-zone').classList.remove('drag');
+  const file=e.dataTransfer.files[0]; if(!file) return;
+  document.getElementById('file-name').textContent='📁 '+file.name;
+  document.getElementById('file-name').style.display='block';
+  uploadFile(file);
+}
+async function uploadFile(file){
+  document.getElementById('upload-prog').style.display='block';
+  document.getElementById('upload-prog-lbl').textContent='Uploading '+file.name+'...';
+  const fd=new FormData(); fd.append('file',file);
+  try{
+    const type=file.type.startsWith('audio')?'audio':'video';
+    const d=await API.postForm('/creator/upload/'+type==='audio'?'media':'media',fd);
+    uploadedMediaUrl=d.data?.url||'';
+    document.getElementById('upload-fill').style.width='100%';
+    document.getElementById('upload-prog-lbl').textContent='✅ Upload complete!';
+    Toast.show('File uploaded successfully!','success');
+  }catch(err){
+    document.getElementById('upload-prog-lbl').textContent='❌ Upload failed: '+err.message;
+    Toast.show('Upload failed: '+err.message,'error');
+  }
+}
+
+async function handleUpload(e){
+  e.preventDefault();
+  const title=document.getElementById('up-title').value.trim();
+  const type=document.getElementById('up-type').value;
+  const genre=document.getElementById('up-genre').value;
+  const desc=document.getElementById('up-desc').value.trim();
+  const mediaUrl=uploadedMediaUrl||document.getElementById('media-url').value.trim();
+  let ok=true;
+  if(!title){V.showErr('up-title','Title required');ok=false;}
+  if(!type){V.showErr('up-type','Select type');ok=false;}
+  if(!genre){V.showErr('up-genre','Select genre');ok=false;}
+  if(desc.length<20){V.showErr('up-desc','Min 20 characters');ok=false;}
+  if(!ok) return;
+  setBtnLoading('upload-btn',true,'Publishing...');
+  try{
+    await API.post('/creator/content',{
+      title, type, genre, description:desc, mediaUrl: mediaUrl||null,
+      monetizationType:document.getElementById('up-monetize').value,
+      ageRating:document.getElementById('up-rating').value,
+      releaseYear:parseInt(document.getElementById('up-year').value)||null,
+      castMembers:document.getElementById('up-cast').value||null,
+      status:'PUBLISHED'
+    });
+    Toast.show('🎉 Content published successfully!','success');
+    document.getElementById('upload-form').reset();
+    uploadedMediaUrl='';
+    document.getElementById('file-name').style.display='none';
+    document.getElementById('upload-prog').style.display='none';
+    switchTab('content', document.querySelector('.tab:first-child'));
+    loadMyContent(0);
+  }catch(err){ Toast.show(err.message||'Upload failed','error'); }
+  finally{ setBtnLoading('upload-btn',false,'📤 Publish Content'); }
+}
+
+async function saveDraft(){
+  const title=document.getElementById('up-title').value.trim();
+  if(!title){V.showErr('up-title','Title required');return;}
+  const desc=document.getElementById('up-desc').value.trim();
+  if(!desc||desc.length<20){V.showErr('up-desc','Min 20 characters');return;}
+  try{
+    await API.post('/creator/content',{
+      title, type:document.getElementById('up-type').value||'MOVIE',
+      genre:document.getElementById('up-genre').value||'Drama',
+      description:desc, status:'DRAFT',
+      mediaUrl:uploadedMediaUrl||document.getElementById('media-url').value.trim()||null
+    });
+    Toast.show('Saved as draft','info');
+    loadMyContent(0);
+  }catch(err){ Toast.show(err.message,'error'); }
+}
+
+function openEdit(c){
+  document.getElementById('edit-id').value=c.id;
+  document.getElementById('e-title').value=c.title;
+  document.getElementById('e-type').value=c.type;
+  document.getElementById('e-genre').value=c.genre||'';
+  document.getElementById('e-desc').value=c.description||'';
+  document.getElementById('e-media').value=c.mediaUrl||'';
+  document.getElementById('e-monetize').value=c.monetizationType||'FREE';
+  document.getElementById('e-price').value=c.price||'';
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeEdit(){ document.getElementById('edit-modal').classList.remove('open'); }
+
+async function submitEdit(e){
+  e.preventDefault();
+  const id=document.getElementById('edit-id').value;
+  const title=document.getElementById('e-title').value.trim();
+  const desc=document.getElementById('e-desc').value.trim();
+  let ok=true;
+  if(!title){V.showErr('e-title','Required');ok=false;}
+  if(desc.length<20){V.showErr('e-desc','Min 20 chars');ok=false;}
+  if(!ok) return;
+  setBtnLoading('edit-btn',true,'Saving...');
+  try{
+    await API.put('/creator/content/'+id,{
+      title, type:document.getElementById('e-type').value,
+      genre:document.getElementById('e-genre').value,
+      description:desc, mediaUrl:document.getElementById('e-media').value||null,
+      monetizationType:document.getElementById('e-monetize').value,
+      price:parseFloat(document.getElementById('e-price').value)||null
+    });
+    Toast.show('Content updated!','success');
+    closeEdit(); loadMyContent(currentContentPage);
+  }catch(err){ Toast.show(err.message||'Update failed','error'); }
+  finally{ setBtnLoading('edit-btn',false,'Save Changes'); }
+}
+
+function deleteContent(id,title){
+  confirmAction(`Delete "${title}"? This cannot be undone.`, async()=>{
+    try{ await API.delete('/creator/content/'+id); Toast.show('Deleted','success'); loadMyContent(currentContentPage); }
+    catch(err){ Toast.show(err.message||'Delete failed','error'); }
+  });
+}
+
+// Init
+loadStats();
+loadMyContent(0);
+</script>
+</body>
+</html>

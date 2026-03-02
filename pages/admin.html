@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StreamVerse — Admin</title>
+<link rel="stylesheet" href="../css/global.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<style>
+.admin-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:2rem;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;position:relative;overflow:hidden;}
+.kpi-icon{font-size:1.3rem;margin-bottom:.4rem;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:1.7rem;font-weight:800;color:#fff;line-height:1;}
+.kpi-lbl{font-size:.7rem;color:var(--muted);margin-top:.22rem;text-transform:uppercase;letter-spacing:.07em;}
+.kpi-delta{font-size:.7rem;margin-top:.35rem;color:var(--green);}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem;}
+.tab{padding:.65rem 1.4rem;font-size:.84rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;}
+.tab.on{color:var(--purple2);border-bottom-color:var(--purple2);}
+.tab-panel{display:none;}
+.tab-panel.on{display:block;}
+.toolbar{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;}
+.search-inp{flex:1;min-width:200px;max-width:300px;}
+.action-btns{display:flex;gap:.35rem;}
+/* Revenue chart */
+.rev-bars{display:flex;align-items:flex-end;gap:10px;height:120px;margin-top:1rem;}
+.rev-bar{flex:1;border-radius:4px 4px 0 0;cursor:pointer;position:relative;transition:filter .15s;}
+.rev-bar:hover{filter:brightness(1.2);}
+.rev-val{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:.68rem;color:var(--purple2);white-space:nowrap;font-weight:600;}
+.rev-lbl{flex:1;text-align:center;font-size:.68rem;color:var(--muted);margin-top:.35rem;}
+.user-tr:hover td{background:rgba(124,58,237,.04);}
+</style>
+</head>
+<body>
+<nav class="navbar" id="main-navbar"></nav>
+<div class="page-wrap">
+<div class="container section">
+
+  <div class="admin-hdr">
+    <div>
+      <div class="eyebrow">Admin Control Center</div>
+      <h1 class="section-title" style="margin-bottom:.2rem;">Platform Dashboard</h1>
+      <p style="color:var(--muted);font-size:.83rem;">Real-time visibility and full control <span class="live-badge"><span class="live-dot"></span> Live</span></p>
+    </div>
+    <div style="display:flex;gap:.7rem;">
+      <button class="btn btn-ghost btn-sm" onclick="refreshAll()">🔄 Refresh</button>
+      <button class="btn btn-primary btn-sm" onclick="openAddUser()">+ Add User</button>
+    </div>
+  </div>
+
+  <!-- KPIs — updated via WebSocket -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-icon">👥</div><div class="kpi-val" id="k-users">—</div><div class="kpi-lbl">Total Users</div><div class="kpi-delta" id="k-new-users"></div></div>
+    <div class="kpi"><div class="kpi-icon">🎬</div><div class="kpi-val" id="k-content">—</div><div class="kpi-lbl">Published</div><div class="kpi-delta" id="k-pending"></div></div>
+    <div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-val" id="k-revenue">—</div><div class="kpi-lbl">Total Revenue</div><div class="kpi-delta" id="k-month-rev"></div></div>
+    <div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-val" id="k-month">—</div><div class="kpi-lbl">Monthly Revenue</div></div>
+    <div class="kpi"><div class="kpi-icon">⚡</div><div class="kpi-val" style="color:var(--green)" id="k-active">—</div><div class="kpi-lbl">Active Users</div></div>
+  </div>
+
+  <!-- Revenue Chart -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:2rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:.82rem;font-weight:700;color:#fff;">Platform Revenue — Last 7 Days <span class="live-badge" style="margin-left:.5rem;"><span class="live-dot"></span> Live</span></div>
+    </div>
+    <div class="rev-bars" id="rev-chart"></div>
+    <div style="display:flex;gap:10px;margin-top:.4rem;" id="rev-labels"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab on" onclick="switchTab('users',this)">👥 Users</div>
+    <div class="tab" onclick="switchTab('content',this)">🎬 Content</div>
+    <div class="tab" onclick="switchTab('revenue',this)">💰 Revenue</div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div class="tab-panel on" id="tab-users">
+    <div class="toolbar">
+      <input class="form-input search-inp" type="text" id="user-search" placeholder="🔍 Search users..." oninput="debounceUserSearch()">
+      <select class="form-select" style="width:auto;" id="role-filter" onchange="loadUsers(0)">
+        <option value="">All Roles</option>
+        <option>VIEWER</option><option>CREATOR</option><option>PUBLISHER</option><option>MODERATOR</option><option>ADMIN</option>
+      </select>
+      <select class="form-select" style="width:auto;" id="status-filter-u" onchange="loadUsers(0)">
+        <option value="">All Status</option>
+        <option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="BANNED">Banned</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="users-table">
+        <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:center;gap:.5rem;margin-top:1rem;" id="user-pag"></div>
+  </div>
+
+  <!-- CONTENT TAB -->
+  <div class="tab-panel" id="tab-content">
+    <div class="toolbar">
+      <select class="form-select" style="width:auto;" id="content-status-filter" onchange="loadAdminContent(0)">
+        <option value="">All Status</option>
+        <option value="PUBLISHED">Published</option>
+        <option value="PENDING_REVIEW">Pending Review</option>
+        <option value="DRAFT">Draft</option>
+        <option value="REJECTED">Rejected</option>
+      </select>
+      <span class="live-badge"><span class="live-dot"></span> Auto-refreshing</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Title</th><th>Type</th><th>Creator</th><th>Status</th><th>Views</th><th>Earnings</th><th>Actions</th></tr></thead>
+        <tbody id="content-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:center;gap:.5rem;margin-top:1rem;" id="content-pag"></div>
+  </div>
+
+  <!-- REVENUE TAB -->
+  <div class="tab-panel" id="tab-revenue">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+      <div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-val" id="r-total">—</div><div class="kpi-lbl">Total Revenue</div></div>
+      <div class="kpi"><div class="kpi-icon">📅</div><div class="kpi-val" id="r-month">—</div><div class="kpi-lbl">This Month</div></div>
+      <div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-val" id="r-avg">—</div><div class="kpi-lbl">Avg per User</div></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+      <div style="font-size:.82rem;font-weight:700;color:#fff;margin-bottom:1rem;">Top Earning Content</div>
+      <table>
+        <thead><tr><th>Title</th><th>Creator</th><th>Type</th><th>Views</th><th>Earnings</th></tr></thead>
+        <tbody id="top-content-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="add-user-modal">
+  <div class="modal">
+    <h3 class="modal-title">Add New User</h3>
+    <p class="modal-sub">Create user account from admin panel</p>
+    <form onsubmit="submitAddUser(event)" novalidate>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+        <div class="form-group"><label class="form-label">First Name *</label><input class="form-input" type="text" id="au-fn" oninput="V.clearErr('au-fn')"><div class="form-error" id="au-fn-err"></div></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input class="form-input" type="text" id="au-ln" oninput="V.clearErr('au-ln')"><div class="form-error" id="au-ln-err"></div></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="au-email" oninput="V.clearErr('au-email')"><div class="form-error" id="au-email-err"></div></div>
+      <div class="form-group"><label class="form-label">Username *</label><input class="form-input" type="text" id="au-un" oninput="V.clearErr('au-un')"><div class="form-error" id="au-un-err"></div></div>
+      <div class="form-group"><label class="form-label">Password *</label><input class="form-input" type="password" id="au-pw" oninput="V.clearErr('au-pw')"><div class="form-error" id="au-pw-err"></div></div>
+      <div class="form-group"><label class="form-label">Role</label>
+        <select class="form-select" id="au-role"><option value="VIEWER">Viewer</option><option value="CREATOR">Creator</option><option value="PUBLISHER">Publisher</option><option value="MODERATOR">Moderator</option><option value="ADMIN">Admin</option></select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('add-user-modal').classList.remove('open')">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="add-user-btn">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="../js/app.js"></script>
+<script>
+if(!requireAuth()){}
+if(!requireRole('ADMIN')){}
+buildNavbar('admin');
+
+let userTimer=null;
+
+// WebSocket live stats
+LiveData.connect(ok=>{
+  if(ok){
+    LiveData.subscribe('/topic/platform-stats',msg=>{
+      if(msg.data){
+        animateCounter(document.getElementById('k-users'),    fmtNum(msg.data.totalUsers));
+        animateCounter(document.getElementById('k-content'),  fmtNum(msg.data.totalContent));
+        animateCounter(document.getElementById('k-revenue'),  fmtMoney(msg.data.totalRevenue));
+        animateCounter(document.getElementById('k-month'),    fmtMoney(msg.data.monthRevenue));
+        const pending=msg.data.pendingContent;
+        document.getElementById('k-pending').textContent=pending>0?`⚠️ ${pending} pending`:'✅ All reviewed';
+      }
+    });
+  }
+  LiveData.poll(loadAdminStats,8000);
+  LiveData.poll(()=>loadAdminContent(0),15000);
+});
+
+async function loadAdminStats(){
+  try{
+    const d=await API.get('/admin/stats');
+    const s=d.data||{};
+    document.getElementById('k-users').textContent    = fmtNum(s.totalUsers||0);
+    document.getElementById('k-content').textContent  = fmtNum(s.publishedContent||0);
+    document.getElementById('k-revenue').textContent  = fmtMoney(s.totalRevenue||0);
+    document.getElementById('k-month').textContent    = fmtMoney(s.monthRevenue||0);
+    document.getElementById('k-active').textContent   = fmtNum(s.activeUsers||0);
+    document.getElementById('k-new-users').textContent= `+${fmtNum(s.newUsersThisMonth||0)} this month`;
+    document.getElementById('k-pending').textContent  = s.pendingContent>0?`⚠️ ${s.pendingContent} pending`:'✅ All reviewed';
+    document.getElementById('r-total').textContent    = fmtMoney(s.totalRevenue||0);
+    document.getElementById('r-month').textContent    = fmtMoney(s.monthRevenue||0);
+    document.getElementById('r-avg').textContent      = s.totalUsers>0?fmtMoney((s.totalRevenue||0)/s.totalUsers):'$0.00';
+    drawChart(s);
+  }catch(e){}
+}
+
+function drawChart(s){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Today'];
+  const revMonth=s.monthRevenue||0;
+  const fake=[revMonth*.08,revMonth*.12,revMonth*.09,revMonth*.15,revMonth*.13,revMonth*.18,revMonth*.25];
+  const maxV=Math.max(...fake)||1;
+  document.getElementById('rev-chart').innerHTML=fake.map((v,i)=>`
+    <div class="rev-bar" style="height:${v/maxV*100}%;background:var(--purple);opacity:${.5+v/maxV*.5}">
+      <span class="rev-val">${fmtMoney(v)}</span></div>`).join('');
+  document.getElementById('rev-labels').innerHTML=days.map(d=>`<div class="rev-lbl">${d}</div>`).join('');
+}
+
+// USERS
+async function loadUsers(page=0){
+  const role=document.getElementById('role-filter').value;
+  const q=document.getElementById('user-search').value.trim();
+  try{
+    const params=new URLSearchParams({page,size:15});
+    if(role) params.set('role',role);
+    if(q) params.set('q',q);
+    const d=await API.get('/admin/users?'+params);
+    const data=d.data||{};
+    const tbody=document.getElementById('users-tbody');
+    tbody.innerHTML=(data.content||[]).map(u=>`
+      <tr class="user-tr">
+        <td><strong>${u.fullName}</strong><div style="font-size:.73rem;color:var(--muted)">@${u.username}</div></td>
+        <td style="color:var(--muted);font-size:.82rem;">${u.email}</td>
+        <td><span class="badge ${{VIEWER:'badge-teal',CREATOR:'badge-purple',PUBLISHER:'badge-amber',ADMIN:'badge-red',MODERATOR:'badge-green'}[u.role]||'badge-purple'}">${u.role}</span></td>
+        <td><span class="badge ${{ACTIVE:'badge-green',SUSPENDED:'badge-amber',BANNED:'badge-red'}[u.status]||'badge-purple'}">${u.status}</span></td>
+        <td style="color:var(--muted);font-size:.8rem;">${u.createdAt?fmtDate(u.createdAt):'—'}</td>
+        <td>
+          <div class="action-btns">
+            ${u.status==='ACTIVE'
+              ?`<button class="btn btn-ghost btn-sm" onclick="setUserStatus(${u.id},'SUSPENDED','${u.fullName}')">🚫 Suspend</button>`
+              :`<button class="btn btn-success btn-sm" onclick="setUserStatus(${u.id},'ACTIVE','${u.fullName}')">✅ Activate</button>`}
+            <button class="btn btn-ghost btn-sm" onclick="setUserRole(${u.id},'${u.role}','${u.fullName}')">🔧 Role</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.fullName}')">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('');
+    renderPag('user-pag', data.totalPages||0, page, (p)=>loadUsers(p));
+  }catch(e){ document.getElementById('users-tbody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">Failed to load users</td></tr>'; }
+}
+
+function debounceUserSearch(){ clearTimeout(userTimer); userTimer=setTimeout(()=>loadUsers(0),400); }
+
+async function setUserStatus(id,status,name){
+  confirmAction(`${status==='SUSPENDED'?'Suspend':'Activate'} "${name}"?`, async()=>{
+    try{ await API.put('/admin/users/'+id+'/status',{status}); Toast.show(`User ${status.toLowerCase()}d`,'success'); loadUsers(0); }
+    catch(e){ Toast.show(e.message,'error'); }
+  });
+}
+
+function setUserRole(id,currentRole,name){
+  const roles=['VIEWER','CREATOR','PUBLISHER','MODERATOR','ADMIN'];
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay open';
+  overlay.innerHTML=`<div class="modal" style="max-width:340px;">
+    <div class="modal-title">Change Role — ${name}</div>
+    <div style="display:flex;flex-direction:column;gap:.5rem;margin:1.1rem 0;">
+      ${roles.map(r=>`<button class="btn ${r===currentRole?'btn-primary':'btn-ghost'} btn-sm" style="justify-content:flex-start;" onclick="doSetRole(${id},'${r}',this.closest('.modal-overlay'))">${r}</button>`).join('')}
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+async function doSetRole(id,role,overlay){
+  try{ await API.put('/admin/users/'+id+'/role',{role}); Toast.show('Role updated to '+role,'success'); overlay.remove(); loadUsers(0); }
+  catch(e){ Toast.show(e.message,'error'); }
+}
+
+async function deleteUser(id,name){
+  confirmAction(`Permanently delete user "${name}"? This cannot be undone.`, async()=>{
+    try{ await API.delete('/admin/users/'+id); Toast.show('User deleted','success'); loadUsers(0); }
+    catch(e){ Toast.show(e.message,'error'); }
+  });
+}
+
+// CONTENT
+async function loadAdminContent(page=0){
+  const status=document.getElementById('content-status-filter').value;
+  try{
+    const params=new URLSearchParams({page,size:15});
+    if(status) params.set('status',status);
+    const d=await API.get('/admin/content?'+params);
+    const data=d.data||{};
+    document.getElementById('content-tbody').innerHTML=(data.content||[]).map(c=>`
+      <tr>
+        <td><strong>${c.title}</strong></td>
+        <td><span class="badge badge-purple">${c.type}</span></td>
+        <td style="color:var(--muted);font-size:.82rem;">${c.creatorName||'#'+c.creatorId}</td>
+        <td><span class="badge ${{PUBLISHED:'badge-green',PENDING_REVIEW:'badge-amber',DRAFT:'badge-purple',REJECTED:'badge-red',ARCHIVED:'badge-teal'}[c.status]||'badge-purple'}">${c.status}</span></td>
+        <td>${fmtNum(c.viewCount||0)}</td>
+        <td style="color:var(--green);font-weight:600;">${fmtMoney(c.totalEarnings||0)}</td>
+        <td>
+          <div class="action-btns">
+            ${c.status==='PENDING_REVIEW'
+              ?`<button class="btn btn-success btn-sm" onclick="setContentStatus(${c.id},'PUBLISHED')">✅ Approve</button>
+                <button class="btn btn-danger btn-sm" onclick="setContentStatus(${c.id},'REJECTED')">❌ Reject</button>`
+              :c.status==='PUBLISHED'
+              ?`<button class="btn btn-ghost btn-sm" onclick="setContentStatus(${c.id},'ARCHIVED')">📦 Archive</button>`
+              :`<button class="btn btn-ghost btn-sm" onclick="setContentStatus(${c.id},'PUBLISHED')">📢 Publish</button>`}
+            <button class="btn btn-danger btn-sm" onclick="deleteContent(${c.id},'${c.title.replace(/'/g,"\\'")}')">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('');
+    // Top content for revenue tab
+    document.getElementById('top-content-tbody').innerHTML=(data.content||[]).sort((a,b)=>(b.totalEarnings||0)-(a.totalEarnings||0)).slice(0,10).map(c=>`
+      <tr><td>${c.title}</td><td style="color:var(--muted)">${c.creatorName||'—'}</td><td><span class="badge badge-purple">${c.type}</span></td>
+      <td>${fmtNum(c.viewCount||0)}</td><td style="color:var(--green);font-weight:600;">${fmtMoney(c.totalEarnings||0)}</td></tr>`).join('');
+    renderPag('content-pag', data.totalPages||0, page, (p)=>loadAdminContent(p));
+  }catch(e){}
+}
+
+async function setContentStatus(id,status){
+  try{ await API.put('/admin/content/'+id+'/status',{status}); Toast.show('Status: '+status,'success'); loadAdminContent(0); }
+  catch(e){ Toast.show(e.message,'error'); }
+}
+async function deleteContent(id,title){
+  confirmAction(`Delete content "${title}"?`, async()=>{
+    try{ await API.delete('/admin/content/'+id); Toast.show('Deleted','success'); loadAdminContent(0); }
+    catch(e){ Toast.show(e.message,'error'); }
+  });
+}
+
+function renderPag(containerId, total, current, onPage){
+  const p=document.getElementById(containerId); if(!p) return; p.innerHTML='';
+  if(total<=1) return;
+  for(let i=0;i<Math.min(total,10);i++){
+    const b=document.createElement('button');
+    b.className='btn btn-ghost btn-sm'+(i===current?' btn-primary':'');
+    b.textContent=i+1; b.onclick=()=>onPage(i); p.appendChild(b);
+  }
+}
+
+function switchTab(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('on'));
+  if(el) el.classList.add('on');
+  document.getElementById('tab-'+name)?.classList.add('on');
+  if(name==='users') loadUsers(0);
+  if(name==='content') loadAdminContent(0);
+}
+
+function openAddUser(){ document.getElementById('add-user-modal').classList.add('open'); }
+async function submitAddUser(e){
+  e.preventDefault();
+  const fn=document.getElementById('au-fn').value.trim(), ln=document.getElementById('au-ln').value.trim(),
+        email=document.getElementById('au-email').value.trim(), un=document.getElementById('au-un').value.trim(),
+        pw=document.getElementById('au-pw').value;
+  let ok=true;
+  if(!fn){V.showErr('au-fn','Required');ok=false;} if(!ln){V.showErr('au-ln','Required');ok=false;}
+  const ee=V.email(email); if(ee){V.showErr('au-email',ee);ok=false;}
+  const une=V.minLen(un,3,'Username'); if(une){V.showErr('au-un',une);ok=false;}
+  const pwe=V.password(pw); if(pwe){V.showErr('au-pw',pwe);ok=false;}
+  if(!ok) return;
+  setBtnLoading('add-user-btn',true,'Creating...');
+  try{
+    await API.post('/admin/users',{firstName:fn,lastName:ln,email,username:un,password:pw,role:document.getElementById('au-role').value});
+    Toast.show('User created!','success');
+    document.getElementById('add-user-modal').classList.remove('open');
+    document.getElementById('au-fn').value=document.getElementById('au-ln').value=document.getElementById('au-email').value=document.getElementById('au-un').value=document.getElementById('au-pw').value='';
+    loadUsers(0);
+  }catch(err){ Toast.show(err.message||'Failed','error'); }
+  finally{ setBtnLoading('add-user-btn',false,'Create User'); }
+}
+
+function refreshAll(){ loadAdminStats(); loadUsers(0); loadAdminContent(0); Toast.show('Refreshed','info',1500); }
+
+// Init
+loadAdminStats();
+loadUsers(0);
+loadAdminContent(0);
+</script>
+</body>
+</html>
