@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StreamVerse — Browse</title>
+<link rel="stylesheet" href="../css/global.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<style>
+.browse-layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 70px);}
+.filter-panel{background:var(--bg2);border-right:1px solid var(--border);padding:1.25rem;position:sticky;top:70px;height:calc(100vh - 70px);overflow-y:auto;}
+.fp-label{font-size:.65rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;margin-top:1.1rem;}
+.fp-label:first-child{margin-top:0;}
+.chips{display:flex;flex-wrap:wrap;gap:.45rem;}
+.chip{padding:.3rem .7rem;border-radius:100px;background:var(--bg3);border:1px solid var(--border);font-size:.76rem;color:var(--muted);cursor:pointer;transition:all .16s;}
+.chip:hover{border-color:var(--purple2);color:var(--purple2);}
+.chip.on{background:rgba(124,58,237,.2);border-color:var(--purple);color:var(--purple2);}
+.content-main{padding:1.5rem;}
+.search-row{display:flex;gap:.75rem;margin-bottom:1.25rem;}
+.search-wrap{flex:1;position:relative;}
+.search-wrap input{padding-left:2.3rem;}
+.s-icon{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;}
+.results-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;}
+.results-count{font-size:.82rem;color:var(--muted);}
+.content-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.1rem;}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s;}
+.tile:hover{transform:translateY(-4px);border-color:var(--purple);}
+.tile-thumb{width:100%;height:120px;display:flex;align-items:center;justify-content:center;font-size:3.2rem;position:relative;}
+.tile-type{position:absolute;top:.45rem;left:.45rem;}
+.tile-ov{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;gap:.4rem;opacity:0;transition:opacity .18s;}
+.tile:hover .tile-ov{opacity:1;}
+.ov-btn{padding:.35rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;border:none;cursor:pointer;}
+.ov-play{background:var(--purple);color:#fff;}
+.ov-fav{background:rgba(255,255,255,.15);color:#fff;}
+.tile-body{padding:.75rem;}
+.tile-title{font-size:.84rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.2rem;}
+.tile-meta{font-size:.72rem;color:var(--muted);display:flex;gap:.4rem;align-items:center;}
+.t-rating{color:var(--amber);}
+.empty-state{grid-column:1/-1;text-align:center;padding:4rem 2rem;color:var(--muted);}
+.empty-icon{font-size:3rem;margin-bottom:.6rem;}
+.pagination{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:2rem;}
+.page-btn{padding:.45rem .9rem;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.82rem;cursor:pointer;transition:all .18s;}
+.page-btn:hover,.page-btn.on{background:var(--purple);color:#fff;border-color:var(--purple);}
+/* Player modal */
+.player-modal-inner{max-width:700px;width:95%;}
+</style>
+</head>
+<body>
+<nav class="navbar" id="main-navbar"></nav>
+<div class="page-wrap">
+<div class="browse-layout">
+  <!-- Filters -->
+  <aside class="filter-panel">
+    <div class="fp-label">Type</div>
+    <div class="chips" id="type-chips">
+      <span class="chip on" data-v="">All</span>
+      <span class="chip" data-v="MOVIE">🎬 Movies</span>
+      <span class="chip" data-v="SERIES">📺 Series</span>
+      <span class="chip" data-v="MUSIC">🎵 Music</span>
+      <span class="chip" data-v="PODCAST">🎙 Podcasts</span>
+      <span class="chip" data-v="LIVE">📡 Live</span>
+    </div>
+    <div class="fp-label">Genre</div>
+    <div class="chips" id="genre-chips">
+      <span class="chip on" data-v="">All</span>
+      <span class="chip" data-v="Action">Action</span>
+      <span class="chip" data-v="Drama">Drama</span>
+      <span class="chip" data-v="Comedy">Comedy</span>
+      <span class="chip" data-v="Sci-Fi">Sci-Fi</span>
+      <span class="chip" data-v="Horror">Horror</span>
+      <span class="chip" data-v="Fantasy">Fantasy</span>
+      <span class="chip" data-v="Documentary">Documentary</span>
+      <span class="chip" data-v="Thriller">Thriller</span>
+      <span class="chip" data-v="Romance">Romance</span>
+      <span class="chip" data-v="Pop">Pop</span>
+      <span class="chip" data-v="Rock">Rock</span>
+      <span class="chip" data-v="Hip-Hop">Hip-Hop</span>
+    </div>
+    <div class="fp-label">Sort By</div>
+    <select class="form-select" id="sort-sel" onchange="loadContent(0)">
+      <option value="trending">🔥 Trending</option>
+      <option value="newest">🆕 Newest</option>
+      <option value="rating">⭐ Top Rated</option>
+      <option value="name">🔤 A–Z</option>
+    </select>
+    <div style="margin-top:1.25rem;">
+      <button class="btn btn-ghost btn-full btn-sm" onclick="clearFilters()">Clear Filters</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="content-main">
+    <div class="search-row">
+      <div class="search-wrap">
+        <span class="s-icon">🔍</span>
+        <input class="form-input" type="text" id="search-inp" placeholder="Search movies, music, podcasts..." oninput="debounceSearch()">
+      </div>
+    </div>
+    <div class="results-hdr">
+      <span class="results-count" id="result-count">Loading...</span>
+      <span class="live-badge"><span class="live-dot"></span> Live</span>
+    </div>
+    <div class="content-grid" id="content-grid"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+</div>
+
+<!-- Player Modal -->
+<div class="modal-overlay" id="player-modal">
+  <div class="modal player-modal-inner">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+      <div><div class="modal-title" id="p-title">—</div><div id="p-meta" style="color:var(--muted);font-size:.8rem;"></div></div>
+      <button class="btn btn-ghost btn-sm" onclick="closePM()">✕</button>
+    </div>
+    <div id="p-container" style="width:100%;border-radius:10px;overflow:hidden;background:#000;min-height:180px;display:flex;align-items:center;justify-content:center;"></div>
+    <div style="margin-top:.85rem;font-size:.82rem;color:var(--muted);" id="p-stats"></div>
+    <p style="margin-top:.75rem;font-size:.83rem;color:var(--muted);line-height:1.6;" id="p-desc"></p>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="../js/app.js"></script>
+<script>
+if(!requireAuth()){}
+buildNavbar('browse');
+LiveData.connect();
+
+let currentPage=0, totalPages=0, searchTimer=null;
+
+// Chip selection
+document.getElementById('type-chips').addEventListener('click',e=>{
+  if(!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('#type-chips .chip').forEach(c=>c.classList.remove('on'));
+  e.target.classList.add('on'); loadContent(0);
+});
+document.getElementById('genre-chips').addEventListener('click',e=>{
+  if(!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('#genre-chips .chip').forEach(c=>c.classList.remove('on'));
+  e.target.classList.add('on'); loadContent(0);
+});
+function debounceSearch(){ clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadContent(0),400); }
+function clearFilters(){
+  document.querySelectorAll('#type-chips .chip,#genre-chips .chip').forEach(c=>c.classList.remove('on'));
+  document.querySelector('#type-chips .chip').classList.add('on');
+  document.querySelector('#genre-chips .chip').classList.add('on');
+  document.getElementById('search-inp').value='';
+  document.getElementById('sort-sel').value='trending';
+  loadContent(0);
+}
+
+async function loadContent(page=0){
+  const type  = document.querySelector('#type-chips .chip.on')?.dataset.v||'';
+  const genre = document.querySelector('#genre-chips .chip.on')?.dataset.v||'';
+  const q     = document.getElementById('search-inp').value.trim();
+  const sort  = document.getElementById('sort-sel').value;
+  const grid  = document.getElementById('content-grid');
+  grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--muted)"><span class="spinner"></span> Loading...</div>';
+  try{
+    const params=new URLSearchParams({page,size:20,sort});
+    if(type) params.set('type',type);
+    if(genre) params.set('genre',genre);
+    if(q) params.set('q',q);
+    const d=await API.get('/content?'+params);
+    const data=d.data||{};
+    const items=data.content||[];
+    currentPage=data.page||0; totalPages=data.totalPages||0;
+    document.getElementById('result-count').textContent=`${data.totalElements||0} title${data.totalElements!==1?'s':''}`;
+    if(!items.length){ grid.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><p>No results found. Try different filters.</p></div>`; renderPagination(); return; }
+    grid.innerHTML=items.map(c=>tile(c)).join('');
+    renderPagination();
+  }catch(e){ grid.innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load content. Is the backend running?</p></div>`; }
+}
+
+function tile(c){
+  const emoji={MOVIE:'🎬',SERIES:'📺',MUSIC:'🎵',PODCAST:'🎙',LIVE:'📡',ORIGINAL:'⭐'}[c.type]||'🎬';
+  const bg={MOVIE:'#1E3A5F',SERIES:'#2D1B00',MUSIC:'#1A0A2E',PODCAST:'#0A2E1A'}[c.type]||'#1A1A2E';
+  return `<div class="tile" onclick="openPlayer(${c.id})">
+    <div class="tile-thumb" style="background:${bg}">${emoji}
+      <span class="tile-type badge badge-purple">${c.type}</span>
+      <div class="tile-ov">
+        <button class="ov-btn ov-play" onclick="event.stopPropagation();openPlayer(${c.id})">▶ Play</button>
+        <button class="ov-btn ov-fav" onclick="event.stopPropagation();Toast.show('Added to favorites!','success')">♥</button>
+      </div>
+    </div>
+    <div class="tile-body">
+      <div class="tile-title">${c.title}</div>
+      <div class="tile-meta">${c.year||c.releaseYear||'—'} · ${c.duration||'—'} · <span class="t-rating">★ ${(c.averageRating||0).toFixed(1)}</span></div>
+    </div></div>`;
+}
+
+function renderPagination(){
+  const p=document.getElementById('pagination'); p.innerHTML='';
+  if(totalPages<=1) return;
+  const prev=document.createElement('button'); prev.className='page-btn'; prev.textContent='← Prev';
+  prev.disabled=currentPage===0; prev.onclick=()=>loadContent(currentPage-1); p.appendChild(prev);
+  for(let i=Math.max(0,currentPage-2);i<=Math.min(totalPages-1,currentPage+2);i++){
+    const b=document.createElement('button'); b.className='page-btn'+(i===currentPage?' on':'');
+    b.textContent=i+1; b.onclick=()=>loadContent(i); p.appendChild(b);
+  }
+  const next=document.createElement('button'); next.className='page-btn'; next.textContent='Next →';
+  next.disabled=currentPage>=totalPages-1; next.onclick=()=>loadContent(currentPage+1); p.appendChild(next);
+}
+
+async function openPlayer(id){
+  try{
+    const d=await API.get('/content/'+id);
+    const c=d.data;
+    document.getElementById('p-title').textContent=c.title;
+    document.getElementById('p-meta').textContent=`${c.type} · ${c.genre||''} · ${c.releaseYear||''} · ${c.duration||''}`;
+    document.getElementById('p-desc').textContent=c.description||'';
+    document.getElementById('p-stats').innerHTML=`<span id="bvc-${c.id}">👁 ${fmtNum(c.viewCount)} views</span> · <span id="bpc-${c.id}">▶ ${fmtNum(c.playCount)} plays</span> · <span style="color:var(--amber)">★ ${(c.averageRating||0).toFixed(1)}</span>`;
+    document.getElementById('p-container').innerHTML=buildPlayer(c);
+    document.getElementById('player-modal').classList.add('open');
+    LiveData.subscribe('/topic/content/'+id, m=>{
+      if(m.data){
+        const vc=document.getElementById('bvc-'+id),pc=document.getElementById('bpc-'+id);
+        if(vc) animateCounter(vc,'👁 '+fmtNum(m.data.viewCount)+' views');
+        if(pc) animateCounter(pc,'▶ '+fmtNum(m.data.playCount)+' plays');
+      }
+    });
+    API.post('/content/'+id+'/view',{}).catch(()=>{});
+  }catch(e){ Toast.show('Failed to load','error'); }
+}
+
+function buildPlayer(c){
+  const url=c.mediaUrl||'';
+  if(!url) return `<div style="padding:3rem;text-align:center;color:var(--muted);font-size:3rem;">${{MOVIE:'🎬',SERIES:'📺',MUSIC:'🎵',PODCAST:'🎙'}[c.type]||'🎬'}<br><br><span style="font-size:.9rem;">No media attached</span></div>`;
+  if(url.includes('youtube.com')||url.includes('youtu.be')||url.startsWith('youtube:')){
+    const vid=(url.match(/(?:v=|youtu\.be\/|youtube:)([^&?/]+)/)||[])[1];
+    if(vid) return `<iframe width="100%" height="340" src="https://www.youtube.com/embed/${vid}?autoplay=1" frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+  }
+  const fullUrl=url.startsWith('http')?url:'http://localhost:8083'+url;
+  const ext=(url.split('.').pop()||'').toLowerCase();
+  if(['mp3','wav','ogg','flac','aac','m4a'].includes(ext)){
+    return `<div style="padding:2.5rem;text-align:center;width:100%;">
+      <div style="font-size:4rem;margin-bottom:.75rem;">🎵</div>
+      <audio controls autoplay style="width:100%;max-width:480px;" onplay="API.post('/content/${c.id}/play',{}).catch(()=>{})">
+        <source src="${fullUrl}"></audio></div>`;
+  }
+  return `<video controls autoplay style="width:100%;max-height:380px;" onplay="API.post('/content/${c.id}/play',{}).catch(()=>{})">
+    <source src="${fullUrl}"><p style="color:var(--muted);padding:1rem;">Browser cannot play this file.</p></video>`;
+}
+
+function closePM(){ document.getElementById('player-modal').classList.remove('open'); }
+document.getElementById('player-modal').addEventListener('click',e=>{ if(e.target===e.currentTarget)closePM(); });
+
+// Init
+const urlParams=new URLSearchParams(location.search);
+if(urlParams.get('sort')) document.getElementById('sort-sel').value=urlParams.get('sort');
+if(urlParams.get('type')){ document.querySelectorAll('#type-chips .chip').forEach(c=>{ c.classList.toggle('on',c.dataset.v===urlParams.get('type').toUpperCase()); }); }
+loadContent(0);
+</script>
+</body>
+</html>

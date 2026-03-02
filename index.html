@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StreamVerse — Sign In</title>
+<link rel="stylesheet" href="css/global.css">
+<style>
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.auth-bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 80% 70% at 60% 40%,rgba(124,58,237,.15) 0%,transparent 65%),radial-gradient(ellipse 50% 50% at 20% 80%,rgba(20,184,166,.08) 0%,transparent 60%);}
+.auth-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(124,58,237,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,.04) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 60% 60% at 50% 50%,black,transparent);}
+.auth-wrap{position:relative;z-index:1;width:100%;max-width:450px;padding:1rem;}
+.auth-logo{text-align:center;margin-bottom:1.75rem;}
+.auth-logo a{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#fff;text-decoration:none;}
+.auth-logo a span{color:var(--purple2);}
+.auth-logo p{font-size:.83rem;color:var(--muted);margin-top:.3rem;}
+.auth-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:2rem;box-shadow:0 8px 48px rgba(0,0,0,.5);}
+.auth-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.5rem;}
+.auth-tab{flex:1;padding:.7rem;text-align:center;font-size:.86rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;}
+.auth-tab.active{color:var(--purple2);border-bottom-color:var(--purple2);}
+.auth-panel{display:none;}
+.auth-panel.active{display:block;}
+.pw-wrap{position:relative;}
+.pw-eye{position:absolute;right:.85rem;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);transition:color .2s;font-size:1rem;}
+.pw-eye:hover{color:var(--purple2);}
+.strength-track{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:.4rem;}
+.strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0;}
+.strength-lbl{font-size:.7rem;color:var(--muted);margin-top:.25rem;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;}
+.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem;}
+.role-opt{padding:.55rem .4rem;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .18s;font-size:.76rem;color:var(--muted);}
+.role-opt:hover{border-color:var(--purple2);color:var(--purple2);}
+.role-opt.sel{background:rgba(124,58,237,.15);border-color:var(--purple);color:var(--purple2);}
+.role-opt-icon{font-size:1.2rem;display:block;margin-bottom:.25rem;}
+.terms{font-size:.76rem;color:var(--muted);text-align:center;margin-top:.9rem;line-height:1.5;}
+.terms a{color:var(--purple2);text-decoration:none;}
+.server-err{display:none;margin-top:.7rem;padding:.7rem 1rem;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:.81rem;color:var(--red);}
+.remember-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+.check-lbl{display:flex;align-items:center;gap:.5rem;font-size:.81rem;color:var(--muted);cursor:pointer;}
+.check-lbl input{accent-color:var(--purple);}
+.forgot{font-size:.8rem;color:var(--purple2);text-decoration:none;}
+.forgot:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="auth-bg"></div><div class="auth-grid"></div>
+<div class="auth-wrap">
+  <div class="auth-logo">
+    <a href="#">Stream<span>Verse</span></a>
+    <p>Your All-In-One Entertainment Universe</p>
+  </div>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Sign In</div>
+      <div class="auth-tab" onclick="switchTab('register')">Create Account</div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="auth-panel active" id="panel-login">
+      <form id="login-form" onsubmit="doLogin(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="l-email">Email Address</label>
+          <input class="form-input" type="email" id="l-email" placeholder="you@example.com" oninput="V.clearErr('l-email')">
+          <div class="form-error" id="l-email-err"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="l-pw">Password</label>
+          <div class="pw-wrap">
+            <input class="form-input" type="password" id="l-pw" placeholder="Your password" oninput="V.clearErr('l-pw')" style="padding-right:2.6rem;">
+            <span class="pw-eye" onclick="togglePw('l-pw',this)">👁️</span>
+          </div>
+          <div class="form-error" id="l-pw-err"></div>
+        </div>
+        <div class="remember-row">
+          <label class="check-lbl"><input type="checkbox" id="remember"> Remember me</label>
+          <a href="#" class="forgot">Forgot password?</a>
+        </div>
+        <button class="btn btn-primary btn-full" type="submit" id="login-btn">Sign In</button>
+        <div class="server-err" id="l-server-err"></div>
+      </form>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="auth-panel" id="panel-register">
+      <form id="reg-form" onsubmit="doRegister(event)" novalidate>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label" for="r-fn">First Name</label>
+            <input class="form-input" type="text" id="r-fn" placeholder="John" oninput="V.clearErr('r-fn')">
+            <div class="form-error" id="r-fn-err"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-ln">Last Name</label>
+            <input class="form-input" type="text" id="r-ln" placeholder="Doe" oninput="V.clearErr('r-ln')">
+            <div class="form-error" id="r-ln-err"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-email">Email Address</label>
+          <input class="form-input" type="email" id="r-email" placeholder="you@example.com" oninput="V.clearErr('r-email')">
+          <div class="form-error" id="r-email-err"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-un">Username</label>
+          <input class="form-input" type="text" id="r-un" placeholder="johndoe123" oninput="V.clearErr('r-un')">
+          <div class="form-error" id="r-un-err"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-pw">Password</label>
+          <div class="pw-wrap">
+            <input class="form-input" type="password" id="r-pw" placeholder="Min 8 chars, 1 upper, 1 number" oninput="checkStrength();V.clearErr('r-pw')" style="padding-right:2.6rem;">
+            <span class="pw-eye" onclick="togglePw('r-pw',this)">👁️</span>
+          </div>
+          <div class="strength-track"><div class="strength-fill" id="str-fill"></div></div>
+          <div class="strength-lbl" id="str-lbl"></div>
+          <div class="form-error" id="r-pw-err"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-cpw">Confirm Password</label>
+          <div class="pw-wrap">
+            <input class="form-input" type="password" id="r-cpw" placeholder="Repeat password" oninput="V.clearErr('r-cpw')" style="padding-right:2.6rem;">
+            <span class="pw-eye" onclick="togglePw('r-cpw',this)">👁️</span>
+          </div>
+          <div class="form-error" id="r-cpw-err"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Type</label>
+          <div class="role-grid">
+            <div class="role-opt sel" onclick="setRole('VIEWER',this)"><span class="role-opt-icon">👤</span>Viewer</div>
+            <div class="role-opt" onclick="setRole('CREATOR',this)"><span class="role-opt-icon">🎬</span>Creator</div>
+            <div class="role-opt" onclick="setRole('PUBLISHER',this)"><span class="role-opt-icon">🏢</span>Publisher</div>
+          </div>
+          <input type="hidden" id="r-role" value="VIEWER">
+        </div>
+        <button class="btn btn-primary btn-full" type="submit" id="reg-btn">Create Account</button>
+        <div class="server-err" id="r-server-err"></div>
+        <p class="terms">By signing up you agree to our <a href="#">Terms</a> & <a href="#">Privacy Policy</a></p>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="toast-container"></div>
+<script src="js/app.js"></script>
+<script>
+if(API.isLoggedIn()) window.location.href='pages/home.html';
+
+function switchTab(t){
+  document.querySelectorAll('.auth-tab').forEach((el,i)=>el.classList.toggle('active',i===(t==='login'?0:1)));
+  document.getElementById('panel-login').classList.toggle('active',t==='login');
+  document.getElementById('panel-register').classList.toggle('active',t==='register');
+}
+function togglePw(id,icon){ const i=document.getElementById(id); i.type=i.type==='password'?'text':'password'; icon.textContent=i.type==='password'?'👁️':'🙈'; }
+function setRole(role,el){ document.getElementById('r-role').value=role; document.querySelectorAll('.role-opt').forEach(r=>r.classList.remove('sel')); el.classList.add('sel'); }
+function checkStrength(){
+  const v=document.getElementById('r-pw').value,fill=document.getElementById('str-fill'),lbl=document.getElementById('str-lbl');
+  let s=0; if(v.length>=8)s++; if(/[A-Z]/.test(v))s++; if(/[0-9]/.test(v))s++; if(/[^A-Za-z0-9]/.test(v))s++;
+  const l=[{c:'var(--red)',p:'15%',t:'Very weak'},{c:'var(--red)',p:'30%',t:'Weak'},{c:'var(--amber)',p:'55%',t:'Fair'},{c:'var(--teal)',p:'80%',t:'Strong'},{c:'var(--green)',p:'100%',t:'Very strong'}][s]||{c:'var(--red)',p:'5%',t:''};
+  fill.style.width=v?l.p:'0'; fill.style.background=l.c; lbl.style.color=l.c; lbl.textContent=v?l.t:'';
+}
+
+async function doLogin(e){
+  e.preventDefault();
+  document.getElementById('l-server-err').style.display='none';
+  const email=document.getElementById('l-email').value.trim(), pw=document.getElementById('l-pw').value;
+  let ok=true;
+  const ee=V.email(email); if(ee){V.showErr('l-email',ee);ok=false;}
+  const pe=V.required(pw,'Password'); if(pe){V.showErr('l-pw',pe);ok=false;}
+  if(!ok) return;
+  setBtnLoading('login-btn',true,'Signing in...');
+  try{
+    const d=await API.post('/auth/login',{email,password:pw});
+    API.setAuth(d.token,d.user);
+    Toast.show('Welcome back, '+( d.user.fullName||d.user.username)+'!','success');
+    setTimeout(()=>window.location.href='pages/home.html',700);
+  }catch(err){
+    const box=document.getElementById('l-server-err'); box.textContent=err.message||'Login failed'; box.style.display='block';
+  }finally{ setBtnLoading('login-btn',false,'Sign In'); }
+}
+
+async function doRegister(e){
+  e.preventDefault();
+  document.getElementById('r-server-err').style.display='none';
+  const fn=document.getElementById('r-fn').value.trim(), ln=document.getElementById('r-ln').value.trim(),
+        email=document.getElementById('r-email').value.trim(), un=document.getElementById('r-un').value.trim(),
+        pw=document.getElementById('r-pw').value, cpw=document.getElementById('r-cpw').value,
+        role=document.getElementById('r-role').value;
+  let ok=true;
+  const fne=V.required(fn,'First name'); if(fne){V.showErr('r-fn',fne);ok=false;}
+  const lne=V.required(ln,'Last name'); if(lne){V.showErr('r-ln',lne);ok=false;}
+  const ee=V.email(email); if(ee){V.showErr('r-email',ee);ok=false;}
+  const une=V.minLen(un,3,'Username'); if(une){V.showErr('r-un',une);ok=false;}
+  const pwe=V.password(pw); if(pwe){V.showErr('r-pw',pwe);ok=false;}
+  if(pw!==cpw){V.showErr('r-cpw','Passwords do not match');ok=false;}
+  if(!ok) return;
+  setBtnLoading('reg-btn',true,'Creating account...');
+  try{
+    const d=await API.post('/auth/register',{firstName:fn,lastName:ln,email,username:un,password:pw,role});
+    API.setAuth(d.token,d.user);
+    Toast.show('Account created! Welcome to StreamVerse 🎉','success');
+    setTimeout(()=>window.location.href='pages/home.html',800);
+  }catch(err){
+    const box=document.getElementById('r-server-err'); box.textContent=err.message||'Registration failed'; box.style.display='block';
+  }finally{ setBtnLoading('reg-btn',false,'Create Account'); }
+}
+</script>
+</body>
+</html>

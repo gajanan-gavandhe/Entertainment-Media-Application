@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StreamVerse — Home</title>
+<link rel="stylesheet" href="../css/global.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<style>
+.hero-banner{background:linear-gradient(135deg,rgba(124,58,237,.22) 0%,rgba(20,184,166,.1) 100%);border:1px solid var(--border);border-radius:18px;padding:2.5rem;margin-bottom:2rem;position:relative;overflow:hidden;}
+.hero-banner::before{content:'';position:absolute;right:-50px;top:-50px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.18) 0%,transparent 70%);pointer-events:none;}
+.quick-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2.2rem;}
+.qs-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center;position:relative;overflow:hidden;}
+.qs-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.qs-val{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--purple2);}
+.qs-lbl{font-size:.73rem;color:var(--muted);margin-top:.2rem;text-transform:uppercase;letter-spacing:.07em;}
+.content-row{margin-bottom:2.2rem;}
+.row-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+.row-title{font-size:1rem;font-weight:700;color:#fff;}
+.row-link{font-size:.8rem;color:var(--purple2);text-decoration:none;}
+.content-scroll{display:flex;gap:.9rem;overflow-x:auto;padding-bottom:.5rem;scrollbar-width:thin;scrollbar-color:var(--card2) transparent;}
+.content-scroll::-webkit-scrollbar{height:4px;}
+.content-scroll::-webkit-scrollbar-thumb{background:var(--card2);border-radius:2px;}
+.c-card{flex-shrink:0;width:185px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s;}
+.c-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--purple);}
+.c-thumb{width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:3rem;position:relative;}
+.c-play-ov{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s;font-size:1.8rem;}
+.c-card:hover .c-play-ov{opacity:1;}
+.c-info{padding:.65rem .75rem;}
+.c-title{font-size:.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.18rem;}
+.c-meta{font-size:.72rem;color:var(--muted);}
+.c-rating{color:var(--amber);}
+.cnt-card{flex-shrink:0;width:260px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s;}
+.cnt-card:hover{transform:translateY(-3px);}
+.cnt-thumb{width:100%;height:130px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;}
+.prog-bar{height:3px;background:var(--card2);}
+.prog-fill{height:100%;background:var(--purple);}
+.empty-row{padding:2rem;text-align:center;color:var(--muted);font-size:.88rem;}
+</style>
+</head>
+<body>
+<nav class="navbar" id="main-navbar"></nav>
+<div class="page-wrap">
+<div class="container section">
+
+  <div class="hero-banner">
+    <div class="eyebrow">Welcome Back</div>
+    <h1 style="font-size:clamp(1.6rem,3vw,2.6rem);font-weight:800;color:#fff;margin-bottom:.5rem;" id="greeting">Good Evening!</h1>
+    <p style="color:var(--muted);max-width:460px;line-height:1.65;margin-bottom:1.4rem;">Your personalized entertainment dashboard — updated live.</p>
+    <div style="display:flex;gap:.8rem;flex-wrap:wrap;">
+      <a href="browse.html" class="btn btn-primary">🎬 Browse Content</a>
+      <a href="browse.html?sort=trending" class="btn btn-ghost">🔥 Trending</a>
+    </div>
+  </div>
+
+  <div class="quick-stats">
+    <div class="qs-card"><div class="qs-icon">👁</div><div class="qs-val" id="qs-watched">—</div><div class="qs-lbl">Watched</div></div>
+    <div class="qs-card"><div class="qs-icon">🎬</div><div class="qs-val" id="qs-total">—</div><div class="qs-lbl">Total Content</div></div>
+    <div class="qs-card"><div class="qs-icon">👥</div><div class="qs-val" id="qs-users">—</div><div class="qs-lbl">Platform Users</div></div>
+    <div class="qs-card"><div class="qs-icon">📡</div><div class="qs-val" id="qs-live">LIVE</div><div class="qs-lbl"><span class="live-dot" style="display:inline-block;vertical-align:middle;margin-right:4px;"></span>Real-Time</div></div>
+  </div>
+
+  <div class="content-row" id="continue-row">
+    <div class="row-hdr"><div class="row-title">▶ Continue Watching</div></div>
+    <div class="content-scroll" id="continue-scroll"><div class="empty-row">Nothing in progress yet. <a href="browse.html" style="color:var(--purple2)">Start watching →</a></div></div>
+  </div>
+
+  <div class="content-row">
+    <div class="row-hdr"><div class="row-title">🔥 Trending Now</div><a href="browse.html?sort=trending" class="row-link">View all →</a></div>
+    <div class="content-scroll" id="trending-scroll"><div class="empty-row">Loading...</div></div>
+  </div>
+
+  <div class="content-row">
+    <div class="row-hdr"><div class="row-title">✨ Latest Additions</div><a href="browse.html?sort=newest" class="row-link">View all →</a></div>
+    <div class="content-scroll" id="latest-scroll"><div class="empty-row">Loading...</div></div>
+  </div>
+
+</div>
+</div>
+
+<!-- PLAYER MODAL -->
+<div class="modal-overlay" id="player-modal">
+  <div class="modal" style="max-width:720px;width:95%;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+      <div><div class="modal-title" id="player-title">—</div><div id="player-meta" style="color:var(--muted);font-size:.8rem;"></div></div>
+      <button class="btn btn-ghost btn-sm" onclick="closePlayer()">✕ Close</button>
+    </div>
+    <div id="player-container" style="width:100%;border-radius:10px;overflow:hidden;background:#000;min-height:200px;display:flex;align-items:center;justify-content:center;"></div>
+    <div style="display:flex;gap:.6rem;margin-top:1rem;flex-wrap:wrap;" id="player-actions"></div>
+    <div style="margin-top:.9rem;font-size:.83rem;color:var(--muted);" id="player-stats"></div>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="../js/app.js"></script>
+<script>
+if(!requireAuth()){}
+buildNavbar('home');
+const user=API.getUser();
+
+// Greeting
+const h=new Date().getHours();
+document.getElementById('greeting').textContent=`${h<12?'Good Morning':h<17?'Good Afternoon':'Good Evening'}, ${user?.firstName||user?.username||'there'}! 👋`;
+
+// Connect WebSocket
+LiveData.connect(ok=>{
+  if(ok){
+    LiveData.subscribe('/topic/platform-stats',d=>{
+      if(d.data){
+        animateCounter(document.getElementById('qs-total'), fmtNum(d.data.totalContent));
+        animateCounter(document.getElementById('qs-users'), fmtNum(d.data.totalUsers));
+      }
+    });
+  }
+  // Always poll as fallback/supplement
+  LiveData.poll(loadStats, 8000);
+  LiveData.poll(loadTrending, 30000);
+});
+
+async function loadStats(){
+  try{
+    const d=await API.get('/user/stats');
+    document.getElementById('qs-watched').textContent = fmtNum(d.data?.watched||0);
+  }catch(e){}
+  try{
+    const d=await API.get('/admin/stats').catch(()=>null);
+    if(d?.data){
+      document.getElementById('qs-total').textContent = fmtNum(d.data.publishedContent||0);
+      document.getElementById('qs-users').textContent = fmtNum(d.data.totalUsers||0);
+    }
+  }catch(e){}
+}
+
+async function loadTrending(){
+  try{
+    const d=await API.get('/content/trending?size=12');
+    const items=d.data||[];
+    const scroll=document.getElementById('trending-scroll');
+    if(!items.length){ scroll.innerHTML='<div class="empty-row">No content yet. <a href="creator.html" style="color:var(--purple2)">Upload some →</a></div>'; return; }
+    scroll.innerHTML=items.map(c=>contentCard(c)).join('');
+    const latest=document.getElementById('latest-scroll');
+    const d2=await API.get('/content?sort=newest&size=12');
+    const items2=(d2.data?.content)||[];
+    latest.innerHTML=items2.length?items2.map(c=>contentCard(c)).join(''):'<div class="empty-row">No content yet.</div>';
+  }catch(e){ console.error(e); }
+}
+
+function contentCard(c){
+  const emoji = typeEmoji(c.type);
+  const bg    = typeBg(c.type);
+  return `<div class="c-card" onclick="openPlayer(${c.id})">
+    <div class="c-thumb" style="background:${bg}">${emoji}
+      <div class="c-play-ov">▶️</div>
+    </div>
+    <div class="c-info">
+      <div class="c-title">${c.title}</div>
+      <div class="c-meta">${c.genre||c.type} · <span class="c-rating">★ ${(c.averageRating||0).toFixed(1)}</span> · <span id="vc-${c.id}">${fmtNum(c.viewCount||0)} views</span></div>
+    </div>
+  </div>`;
+}
+function typeEmoji(t){ return {MOVIE:'🎬',SERIES:'📺',MUSIC:'🎵',PODCAST:'🎙',LIVE:'📡',ORIGINAL:'⭐'}[t]||'🎬'; }
+function typeBg(t){ return {MOVIE:'#1E3A5F',SERIES:'#2D1B00',MUSIC:'#1A0A2E',PODCAST:'#0A2E1A',LIVE:'#2E0A0A',ORIGINAL:'#0A1A2E'}[t]||'#1A1A2E'; }
+
+// Player
+async function openPlayer(id){
+  try{
+    const d=await API.get('/content/'+id);
+    const c=d.data;
+    document.getElementById('player-title').textContent=c.title;
+    document.getElementById('player-meta').textContent=`${c.type} · ${c.genre||''} · ${c.releaseYear||''}`;
+    const container=document.getElementById('player-container');
+    container.innerHTML=buildPlayer(c);
+    document.getElementById('player-stats').innerHTML=
+      `<span id="live-vc-${c.id}">👁 ${fmtNum(c.viewCount)} views</span> · 
+       <span id="live-pc-${c.id}">▶ ${fmtNum(c.playCount)} plays</span> · 
+       <span style="color:var(--amber)">★ ${(c.averageRating||0).toFixed(1)}</span>`;
+    document.getElementById('player-actions').innerHTML=`
+      <button class="btn btn-primary btn-sm" onclick="recordPlay(${c.id})">▶ Record Play</button>
+      <button class="btn btn-ghost btn-sm" onclick="recordView(${c.id})">👁 Record View</button>`;
+    document.getElementById('player-modal').classList.add('open');
+    // Subscribe to live updates for this content
+    LiveData.subscribe('/topic/content/'+id, msg=>{
+      if(msg.data){
+        const vc=document.getElementById('live-vc-'+id);
+        const pc=document.getElementById('live-pc-'+id);
+        if(vc) animateCounter(vc,'👁 '+fmtNum(msg.data.viewCount)+' views');
+        if(pc) animateCounter(pc,'▶ '+fmtNum(msg.data.playCount)+' plays');
+      }
+    });
+    // Record view automatically
+    await API.post('/content/'+id+'/view',{}).catch(()=>{});
+  }catch(e){ Toast.show('Failed to load content','error'); }
+}
+
+function buildPlayer(c){
+  const url=c.mediaUrl||'';
+  if(url.startsWith('youtube:')){
+    const vid=url.replace('youtube:','');
+    return `<iframe width="100%" height="360" src="https://www.youtube.com/embed/${vid}?autoplay=1" frameborder="0" allowfullscreen allow="autoplay"></iframe>`;
+  }
+  if(url.includes('youtube.com')||url.includes('youtu.be')){
+    const vid=url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1];
+    if(vid) return `<iframe width="100%" height="360" src="https://www.youtube.com/embed/${vid}?autoplay=1" frameborder="0" allowfullscreen allow="autoplay"></iframe>`;
+  }
+  if(!url) return `<div style="padding:3rem;text-align:center;color:var(--muted);">${typeEmoji(c.type)}<br><br><p>No media file attached to this content.</p></div>`;
+  const ext=(url.split('.').pop()||'').toLowerCase();
+  const audioExts=['mp3','wav','ogg','flac','aac','m4a'];
+  const videoExts=['mp4','webm','mkv','avi','mov','m3u8'];
+  if(audioExts.includes(ext)){
+    return `<div style="padding:2rem;width:100%;text-align:center;">
+      <div style="font-size:4rem;margin-bottom:1rem;">${typeEmoji(c.type)}</div>
+      <div style="font-size:1rem;font-weight:600;color:#fff;margin-bottom:1rem;">${c.title}</div>
+      <audio controls autoplay style="width:100%;max-width:500px;" onplay="recordPlay(${c.id})">
+        <source src="${url.startsWith('http')?url:'http://localhost:8080'+url}">
+        Your browser does not support audio.
+      </audio></div>`;
+  }
+  return `<video controls autoplay style="width:100%;max-height:400px;" onplay="recordPlay(${c.id})">
+    <source src="${url.startsWith('http')?url:'http://localhost:8080'+url}">
+    Your browser does not support video.
+  </video>`;
+}
+
+async function recordPlay(id){
+  try{ await API.post('/content/'+id+'/play',{}); }catch(e){}
+}
+async function recordView(id){
+  try{ await API.post('/content/'+id+'/view',{}); Toast.show('View recorded','success'); }catch(e){}
+}
+function closePlayer(){ document.getElementById('player-modal').classList.remove('open'); }
+document.getElementById('player-modal').addEventListener('click',e=>{ if(e.target===e.currentTarget)closePlayer(); });
+
+loadStats(); loadTrending();
+</script>
+</body>
+</html>
